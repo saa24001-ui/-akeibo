@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>パクパク☆モンスター キャッチ＆フィーバー！</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&display=swap');
+    
+    body {
+      font-family: 'M PLUS Rounded 1c', sans-serif;
+      touch-action: manipulation;
+      user-select: none;
+    }
+
+    /* フィーバー時の虹色アニメーション */
+    @keyframes rainbow-bg {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .fever-mode {
+      background: linear-gradient(45deg, #ff7675, #fdcb6e, #55efc4, #74b9ff, #a29bfe) !important;
+      background-size: 400% 400% !important;
+      animation: rainbow-bg 1.5s ease infinite !important;
+    }
+
+    /* 画面シェイクアニメーション */
+    @keyframes shake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-8px, 5px); }
+      40% { transform: translate(8px, -5px); }
+      60% { transform: translate(-5px, 8px); }
+      80% { transform: translate(5px, -8px); }
+    }
+
+    .shake {
+      animation: shake 0.3s ease-in-out;
+    }
+
+    /* 浮き出るテキストポップアップ */
+    @keyframes pop-text {
+      0% { transform: scale(0.5) translateY(0); opacity: 0; }
+      50% { transform: scale(1.3) translateY(-20px); opacity: 1; }
+      100% { transform: scale(1) translateY(-40px); opacity: 0; }
+    }
+
+    .pop-effect {
+      position: absolute;
+      font-weight: 900;
+      pointer-events: none;
+      animation: pop-text 0.8s ease-out forwards;
+      text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+    }
+
+    canvas {
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-between p-2 sm:p-4 overflow-x-hidden">
+
+  <!-- ヘッダーエリア -->
+  <header class="w-full max-w-lg bg-slate-800/90 backdrop-blur rounded-2xl p-3 border-2 border-amber-400 shadow-lg flex items-center justify-between mb-2">
+    <div class="flex items-center gap-2">
+      <span class="text-3xl animate-bounce">👾</span>
+      <div>
+        <h1 class="text-lg font-black text-amber-300 leading-tight">パク☆モン</h1>
+        <p class="text-xs text-slate-400">キャッチ＆フィーバー！</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- サウンド切り替え -->
+      <button id="sound-toggle" class="bg-slate-700 hover:bg-slate-600 text-amber-300 p-2 rounded-xl text-lg w-10 h-10 flex items-center justify-center transition">
+        <i class="fa-solid fa-volume-high"></i>
+      </button>
+
+      <!-- Firebase設定ボタン -->
+      <button id="config-btn" class="bg-slate-700 hover:bg-slate-600 text-cyan-300 p-2 rounded-xl text-lg w-10 h-10 flex items-center justify-center transition" title="Firebase設定">
+        <i class="fa-solid fa-gear"></i>
+      </button>
+
+      <!-- ユーザーログインボタン/プロフ -->
+      <div id="auth-container">
+        <button id="login-btn" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 px-3 rounded-xl flex items-center gap-1 shadow-md transition">
+          <i class="fa-brands fa-google"></i> ログイン
+        </button>
+        <div id="user-profile" class="hidden flex items-center gap-2 bg-slate-700/80 py-1 px-2 rounded-xl border border-slate-600">
+          <img id="user-avatar" class="w-7 h-7 rounded-full border border-amber-400" src="" alt="avatar">
+          <span id="user-name" class="text-xs font-bold truncate max-w-[80px]">---</span>
+          <button id="logout-btn" class="text-slate-400 hover:text-red-400 text-xs ml-1"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- メインゲーム枠 -->
+  <main class="relative w-full max-w-lg aspect-[3/4] bg-slate-800 rounded-3xl border-4 border-amber-400 shadow-2xl overflow-hidden flex flex-col justify-between" id="game-wrapper">
+    
+    <!-- 上部ステータスバー -->
+    <div class="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-slate-900/80 to-transparent flex justify-between items-start z-10 pointer-events-none">
+      <div>
+        <div class="text-xs text-amber-300 font-bold">SCORE</div>
+        <div id="score-display" class="text-3xl font-black text-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">0</div>
+      </div>
+      
+      <!-- フィーバーゲージ -->
+      <div class="flex-1 mx-4 max-w-[140px]">
+        <div class="text-xs text-cyan-300 font-bold text-center mb-0.5">FEVER GAUGE</div>
+        <div class="w-full bg-slate-700/80 h-4 rounded-full p-0.5 border border-cyan-400/50">
+          <div id="fever-bar" class="bg-gradient-to-r from-cyan-400 to-pink-500 h-full rounded-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="text-right">
+        <div class="text-xs text-rose-400 font-bold">TIME</div>
+        <div id="timer-display" class="text-3xl font-black text-rose-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">40</div>
+      </div>
+    </div>
+
+    <!-- ポップアップテキスト表示コンテナ -->
+    <div id="effect-container" class="absolute inset-0 pointer-events-none z-20"></div>
+
+    <!-- ゲーム描画用Canvas -->
+    <canvas id="gameCanvas" class="w-full h-full bg-gradient-to-b from-indigo-950 via-slate-900 to-purple-950"></canvas>
+
+    <!-- タッチ・操作補助用オーバーレイボタン (スマホ対応) -->
+    <div class="absolute bottom-3 left-3 right-3 flex justify-between items-center z-10 pointer-events-auto">
+      <div class="flex gap-2">
+        <button id="btn-left" class="w-14 h-14 bg-slate-700/70 active:bg-amber-500 border-2 border-amber-400 rounded-2xl text-2xl flex items-center justify-center text-amber-300 shadow-lg active:scale-95 transition select-none">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <button id="btn-right" class="w-14 h-14 bg-slate-700/70 active:bg-amber-500 border-2 border-amber-400 rounded-2xl text-2xl flex items-center justify-center text-amber-300 shadow-lg active:scale-95 transition select-none">
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- スキルボタン (磁石) -->
+      <button id="btn-skill" class="bg-gradient-to-r from-purple-600 to-pink-600 active:from-purple-500 active:to-pink-500 border-2 border-pink-300 py-2 px-4 rounded-2xl flex items-center gap-2 text-white font-black shadow-lg active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none">
+        <span class="text-2xl">🧲</span>
+        <div class="text-left leading-tight">
+          <div class="text-xs text-pink-200">スキル</div>
+          <div class="text-sm">すいよせ!</div>
+        </div>
+      </button>
+    </div>
+
+    <!-- スタート画面オーバーレイ -->
+    <div id="overlay-start" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-6 text-center">
+      <div class="text-6xl mb-2 animate-bounce">👾🍰</div>
+      <h2 class="text-2xl sm:text-3xl font-black text-amber-300 mb-2 leading-tight">パクパク☆モンスター<br><span class="text-pink-400 text-xl">キャッチ＆フィーバー！</span></h2>
+      <p class="text-xs sm:text-sm text-slate-300 mb-6 max-w-xs leading-relaxed">
+        左右にうごいて、空からふってくるお菓子をパクパク食べよう！<br>
+        🌟スターを集めて<span class="text-cyan-300 font-bold">フィーバーモード</span>へ突入！<br>
+        💣爆弾にあたると減点だよ！
+      </p>
+
+      <button id="start-game-btn" class="w-full max-w-xs bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 hover:brightness-110 text-slate-950 font-black text-xl py-4 px-8 rounded-2xl shadow-xl transform active:scale-95 transition">
+        <i class="fa-solid fa-play mr-2"></i> スタート！
+      </button>
+    </div>
+
+    <!-- ゲームオーバー画面オーバーレイ -->
+    <div id="overlay-result" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 text-center">
+      <div class="text-5xl mb-1">🏆</div>
+      <div class="text-xs font-bold text-amber-400 tracking-widest uppercase">GAME OVER</div>
+      <h2 class="text-3xl font-black text-white mb-2">タイムアップ！</h2>
+      
+      <!-- 最終スコア表示 -->
+      <div class="bg-slate-800/90 border-2 border-amber-400 rounded-2xl p-4 w-full max-w-xs mb-4">
+        <div class="text-xs text-slate-400 font-bold mb-1">獲得スコア</div>
+        <div id="final-score" class="text-4xl font-black text-amber-300 mb-1">0</div>
+        <div id="rank-title" class="inline-block bg-purple-900/80 text-pink-300 text-xs font-extrabold px-3 py-1 rounded-full border border-pink-500/50">
+          称号: 駆け出しモンスター
+        </div>
+      </div>
+
+      <div id="save-status" class="text-xs text-cyan-300 font-bold mb-4 min-h-[20px]"></div>
+
+      <div class="flex gap-3 w-full max-w-xs">
+        <button id="retry-btn" class="flex-1 bg-gradient-to-r from-emerald-400 to-teal-500 hover:brightness-110 text-slate-950 font-black text-lg py-3 px-4 rounded-xl shadow-lg active:scale-95 transition">
+          <i class="fa-solid fa-rotate-right mr-1"></i> もう1回
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 全国ランキングボード -->
+  <section class="w-full max-w-lg bg-slate-800/90 rounded-2xl p-4 border border-slate-700 shadow-xl my-2">
+    <div class="flex items-center justify-between mb-3 border-b border-slate-700 pb-2">
+      <h3 class="text-sm font-black text-amber-300 flex items-center gap-2">
+        <i class="fa-solid fa-trophy text-amber-400"></i> 全国ハイスコアランキング TOP 5
+      </h3>
+      <span class="text-[10px] text-slate-400">リアルタイム送信</span>
+    </div>
+
+    <div id="leaderboard-list" class="space-y-1.5 text-xs">
+      <div class="text-center text-slate-400 py-3">読み込み中...</div>
+    </div>
+  </section>
+
+  <!-- Firebase設定ダイアログモーダル -->
+  <div id="config-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border-2 border-cyan-400 rounded-3xl p-5 w-full max-w-md text-slate-200 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-base font-black text-cyan-300 flex items-center gap-2">
+          <i class="fa-solid fa-sliders"></i> Firebase設定
+        </h3>
+        <button id="close-config-btn" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-slate-300 mb-3 leading-relaxed">
+        ご自身のFirebaseプロジェクトの設定情報を貼り付けると、Googleログインと全国ランキング機能が有効化されます。（空欄の場合はデモモード動作になります）
+      </p>
+
+      <div class="space-y-2 text-xs mb-4">
+        <div>
+          <label class="block text-slate-400 mb-1">API Key</label>
+          <input id="cfg-apiKey" type="text" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-amber-300 focus:outline-none focus:border-cyan-400" placeholder="AIzaSy...">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Auth Domain</label>
+          <input id="cfg-authDomain" type="text" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-amber-300 focus:outline-none focus:border-cyan-400" placeholder="your-app.firebaseapp.com">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Project ID</label>
+          <input id="cfg-projectId" type="text" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 font-mono text-amber-300 focus:outline-none focus:border-cyan-400" placeholder="your-app-id">
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button id="save-config-btn" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black py-2.5 rounded-xl transition">
+          保存して適用
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===================================================
+       1. 効果音生成エンジン (Web Audio API - 外部ファイル不要)
+       =================================================== */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+      }
+
+      playCatch() {
+        if (this.muted || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.1);
+      }
+
+      playBomb() {
+        if (this.muted || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.25);
+      }
+
+      playFever() {
+        if (this.muted || !this.ctx) return;
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.06);
+          gain.gain.setValueAtTime(0.3, this.ctx.currentTime + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.06 + 0.15);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(this.ctx.currentTime + idx * 0.06);
+          osc.stop(this.ctx.currentTime + idx * 0.06 + 0.15);
+        });
+      }
+
+      playSkill() {
+        if (this.muted || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(1200, this.ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
+    }
+
+    const sound = new SoundEngine();
+    const soundBtn = document.getElementById('sound-toggle');
+    soundBtn.addEventListener('click', () => {
+      sound.init();
+      sound.muted = !sound.muted;
+      soundBtn.innerHTML = sound.muted ? '<i class="fa-solid fa-volume-xmark text-slate-400"></i>' : '<i class="fa-solid fa-volume-high"></i>';
+    });
+  </script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    /* ===================================================
+       2. Firebase & 認証統合 (遵守ルール適用)
+       =================================================== */
+    // アプリID取得 (環境変数またはデフォルト値)
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'monster-catch-fever';
+
+    // カスタムまたは既存のFirebase設定ロード
+    let savedConfig = null;
+    try {
+      const stored = localStorage.getItem('custom_firebase_config');
+      if (stored) savedConfig = JSON.parse(stored);
+      else if (typeof __firebase_config !== 'undefined') savedConfig = JSON.parse(__firebase_config);
+    } catch (e) {
+      console.warn("Firebase config load warning:", e);
+    }
+
+    let auth = null;
+    let db = null;
+    let currentUser = null;
+
+    if (savedConfig && savedConfig.apiKey && savedConfig.apiKey !== "YOUR_API_KEY") {
+      try {
+        const app = initializeApp(savedConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        
+        // ログイン状態変更の監視
+        onAuthStateChanged(auth, (user) => {
+          currentUser = user;
+          updateAuthUI();
+          if (user) {
+            loadLeaderboard();
+          }
+        });
+      } catch (err) {
+        console.error("Firebase init error:", err);
+      }
+    } else {
+      console.log("Demo Mode: Firebase configuration is not set.");
+    }
+
+    // UI要素
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const userProfile = document.getElementById("user-profile");
+    const userAvatar = document.getElementById("user-avatar");
+    const userName = document.getElementById("user-name");
+
+    function updateAuthUI() {
+      if (currentUser) {
+        loginBtn.classList.add("hidden");
+        userProfile.classList.remove("hidden");
+        userAvatar.src = currentUser.photoURL || "https://placehold.co/100x100/334155/f59e0b?text=User";
+        userName.textContent = currentUser.displayName || "プレイヤー";
+      } else {
+        loginBtn.classList.remove("hidden");
+        userProfile.classList.add("hidden");
+      }
+    }
+
+    // Googleログイン実行
+    loginBtn.addEventListener("click", async () => {
+      sound.init();
+      if (!auth) {
+        document.getElementById("config-modal").classList.remove("hidden");
+        return;
+      }
+      try {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } catch (err) {
+        console.error("Login failed:", err);
+        alert("Googleログインに失敗しました: " + err.message);
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      if (auth) signOut(auth);
+    });
+
+    /* ===================================================
+       3. ランキングシステム (Rule 1 & Rule 2 & Rule 3 順守)
+       =================================================== */
+    const leaderboardList = document.getElementById("leaderboard-list");
+
+    function loadLeaderboard() {
+      if (!db) {
+        renderDemoLeaderboard();
+        return;
+      }
+
+      // Rule 1: パス構造 `/artifacts/{appId}/public/data/{collectionName}`
+      const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+
+      // Rule 2: 複合クエリ(orderBy)不使用。全件取得しメモリ内でソート
+      onSnapshot(colRef, (snapshot) => {
+        const items = [];
+        snapshot.forEach(docSnap => {
+          items.push(docSnap.data());
+        });
+
+        // メモリ内ソート (降順)
+        items.sort((a, b) => (b.score || 0) - (a.score || 0));
+        renderLeaderboardUI(items.slice(0, 5));
+      }, (error) => {
+        console.error("Leaderboard fetch error:", error);
+        renderDemoLeaderboard();
+      });
+    }
+
+    function renderLeaderboardUI(list) {
+      leaderboardList.innerHTML = "";
+      if (list.length === 0) {
+        leaderboardList.innerHTML = `<div class="text-center text-slate-400 py-2">まだ記録がありません。一番乗りしよう！</div>`;
+        return;
+      }
+
+      const medals = ["🥇", "🥈", "🥉", "4.", "5."];
+      list.forEach((item, idx) => {
+        const row = document.createElement("div");
+        row.className = "flex items-center justify-between bg-slate-900/60 p-2 rounded-xl border border-slate-700/50";
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-black w-6 text-center">${medals[idx] || (idx + 1) + '.'}</span>
+            <span class="font-bold text-slate-200 truncate max-w-[120px]">${escapeHtml(item.name || '名無し')}</span>
+          </div>
+          <div class="text-right">
+            <span class="font-black text-amber-400">${item.score}</span>
+            <span class="text-[10px] text-slate-400">点</span>
+          </div>
+        `;
+        leaderboardList.appendChild(row);
+      });
+    }
+
+    function renderDemoLeaderboard() {
+      const demoData = [
+        { name: "すしキング", score: 1850 },
+        { name: "たこやきハカセ", score: 1420 },
+        { name: "お菓子マスター", score: 980 }
+      ];
+      renderLeaderboardUI(demoData);
+    }
+
+    async function saveScoreToFirestore(score) {
+      const statusEl = document.getElementById("save-status");
+      if (!currentUser || !db) {
+        statusEl.innerHTML = `<span class="text-amber-400">💡 Googleログインすると全国ランキングに保存されるよ！</span>`;
+        return;
+      }
+
+      statusEl.textContent = "スコアを保存中...";
+      try {
+        // Rule 1: 正しいパスに保存
+        const userDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboard', currentUser.uid);
+        const snap = await getDoc(userDocRef);
+
+        if (!snap.exists() || (snap.data().score || 0) < score) {
+          await setDoc(userDocRef, {
+            name: currentUser.displayName || "名無しプレイヤー",
+            score: score,
+            updatedAt: new Date().toISOString()
+          });
+          statusEl.innerHTML = `<span class="text-emerald-400 font-bold">🎉 自己ベスト更新！全国ランキングに保存したよ！</span>`;
+        } else {
+          statusEl.textContent = `自己ベスト: ${snap.data().score} 点`;
+        }
+      } catch (err) {
+        console.error("Score save error:", err);
+        statusEl.textContent = "スコア保存に失敗しました。";
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // 初期ロード
+    if (!db) renderDemoLeaderboard();
+    else if (currentUser) loadLeaderboard();
+
+    /* ===================================================
+       4. ゲームアクションエンジン (Canvas 2D)
+       =================================================== */
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const gameWrapper = document.getElementById("game-wrapper");
+
+    // レスポンシブ解像度調整
+    function resizeCanvas() {
+      const rect = gameWrapper.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // ゲーム状態変数
+    let score = 0;
+    let timeLeft = 40;
+    let feverGauge = 0;
+    let isFever = false;
+    let feverTimer = 0;
+    let isGameRunning = false;
+    let gameLoopId = null;
+    let timerInterval = null;
+    let magnetActive = false;
+    let magnetTimer = 0;
+
+    // プレイヤーオブジェクト
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 70,
+      width: 60,
+      height: 60,
+      speed: 8,
+      emoji: "👾"
+    };
+
+    // 落ちてくるアイテム構造
+    let items = [];
+
+    const ITEM_TYPES = [
+      { emoji: "🍰", score: 20, fever: 10, weight: 35, speed: 3.5 },
+      { emoji: "🍕", score: 30, fever: 15, weight: 25, speed: 4.0 },
+      { emoji: "💎", score: 80, fever: 30, weight: 10, speed: 5.5 },
+      { emoji: "🌟", score: 10, fever: 50, weight: 12, speed: 4.5 },
+      { emoji: "💣", score: -50, fever: 0, weight: 18, speed: 4.0, isBomb: true }
+    ];
+
+    // 入力コントロール管理
+    let keys = { left: false, right: false };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+      if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+      if (e.key === " ") triggerMagnetSkill();
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+      if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+    });
+
+    // タッチ＆マウス操作
+    const btnLeft = document.getElementById("btn-left");
+    const btnRight = document.getElementById("btn-right");
+    const btnSkill = document.getElementById("btn-skill");
+
+    const setupBtn = (btn, key) => {
+      btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[key] = true; });
+      btn.addEventListener("touchend", (e) => { e.preventDefault(); keys[key] = false; });
+      btn.addEventListener("mousedown", () => keys[key] = true);
+      btn.addEventListener("mouseup", () => keys[key] = false);
+    };
+    setupBtn(btnLeft, "left");
+    setupBtn(btnRight, "right");
+
+    btnSkill.addEventListener("click", () => triggerMagnetSkill());
+
+    // キャンバス直接ドラッグ操作
+    let isDragging = false;
+    canvas.addEventListener("pointerdown", (e) => { isDragging = true; updatePlayerPos(e); });
+    canvas.addEventListener("pointermove", (e) => { if (isDragging) updatePlayerPos(e); });
+    canvas.addEventListener("pointerup", () => isDragging = false);
+
+    function updatePlayerPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.clientX;
+      player.x = clientX - rect.left - player.width / 2;
+    }
+
+    // アイテム生成
+    function spawnItem() {
+      const totalWeight = ITEM_TYPES.reduce((acc, i) => acc + i.weight, 0);
+      let rand = Math.random() * totalWeight;
+      let selected = ITEM_TYPES[0];
+
+      for (let item of ITEM_TYPES) {
+        if (rand < item.weight) {
+          selected = item;
+          break;
+        }
+        rand -= item.weight;
+      }
+
+      // フィーバー中はダイヤとケーキばかり落ちてくる
+      if (isFever && Math.random() < 0.6) {
+        selected = ITEM_TYPES[2]; // 💎
+      }
+
+      items.push({
+        x: Math.random() * (canvas.width - 40) + 20,
+        y: -40,
+        size: 38,
+        speed: selected.speed + (isFever ? 2 : Math.random() * 1.5),
+        ...selected
+      });
+    }
+
+    // マグネットスキル発動
+    function triggerMagnetSkill() {
+      if (!isGameRunning || magnetActive) return;
+      sound.playSkill();
+      magnetActive = true;
+      magnetTimer = 180; // 約3秒間
+      btnSkill.disabled = true;
+
+      showEffectText("🧲 マッハダイソン！", player.x, player.y - 40, "text-pink-400");
+
+      setTimeout(() => {
+        btnSkill.disabled = false;
+      }, 10000); // 10秒クールダウン
+    }
+
+    // エフェクトテキスト表示
+    function showEffectText(text, x, y, colorClass = "text-amber-300") {
+      const container = document.getElementById("effect-container");
+      const el = document.createElement("div");
+      el.className = `pop-effect ${colorClass} text-xl sm:text-2xl`;
+      el.textContent = text;
+      el.style.left = `${Math.min(Math.max(x, 20), canvas.width - 100)}px`;
+      el.style.top = `${y}px`;
+      container.appendChild(el);
+
+      setTimeout(() => el.remove(), 800);
+    }
+
+    // ゲーム更新ループ
+    function update() {
+      if (!isGameRunning) return;
+
+      // プレイヤー移動処理
+      if (keys.left) player.x -= player.speed;
+      if (keys.right) player.x += player.speed;
+      if (player.x < 0) player.x = 0;
+      if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+      // フィーバー管理
+      if (isFever) {
+        feverTimer--;
+        if (feverTimer <= 0) {
+          isFever = false;
+          gameWrapper.classList.remove("fever-mode");
+        }
+      }
+
+      // マグネットタイマー
+      if (magnetActive) {
+        magnetTimer--;
+        if (magnetTimer <= 0) magnetActive = false;
+      }
+
+      // キャンバス消去
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // プレイヤー描写
+      ctx.font = "50px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(isFever ? "🔥" : (magnetActive ? "🧲" : player.emoji), player.x + player.width / 2, player.y + player.height / 2);
+
+      // アイテム処理
+      for (let i = items.length - 1; i >= 0; i--) {
+        let item = items[i];
+
+        // マグネット効果でプレイヤーに吸い寄せる
+        if (magnetActive && !item.isBomb) {
+          const dx = (player.x + player.width / 2) - item.x;
+          const dy = (player.y + player.height / 2) - item.y;
+          item.x += dx * 0.12;
+          item.y += dy * 0.12;
+        } else {
+          item.y += item.speed;
+        }
+
+        // アイテム描画
+        ctx.font = `${item.size}px sans-serif`;
+        ctx.fillText(item.emoji, item.x, item.y);
+
+        // 当たり判定 (中心距離で判定)
+        const distX = Math.abs((player.x + player.width / 2) - item.x);
+        const distY = Math.abs((player.y + player.height / 2) - item.y);
+
+        if (distX < 40 && distY < 40) {
+          // キャッチ成功
+          score += item.score * (isFever ? 2 : 1);
+          if (score < 0) score = 0;
+
+          if (item.isBomb) {
+            sound.playBomb();
+            gameWrapper.classList.add("shake");
+            setTimeout(() => gameWrapper.classList.remove("shake"), 300);
+            showEffectText("💥 -50", item.x, item.y, "text-red-500");
+          } else {
+            sound.playCatch();
+            showEffectText(`+${item.score * (isFever ? 2 : 1)}`, item.x, item.y, isFever ? "text-pink-300" : "text-amber-300");
+
+            // フィーバーゲージ増加
+            if (!isFever) {
+              feverGauge += item.fever;
+              if (feverGauge >= 100) {
+                feverGauge = 0;
+                isFever = true;
+                feverTimer = 300; // 5秒間
+                sound.playFever();
+                gameWrapper.classList.add("fever-mode");
+                showEffectText("🔥 FEVER TIME!!", canvas.width / 2 - 50, 150, "text-yellow-300");
+              }
+            }
+          }
+
+          items.splice(i, 1);
+          continue;
+        }
+
+        // 画面外落下
+        if (item.y > canvas.height + 40) {
+          items.splice(i, 1);
+        }
+      }
+
+      // ランダムアイテム発生
+      if (Math.random() < (isFever ? 0.25 : 0.08)) {
+        spawnItem();
+      }
+
+      // UI表示更新
+      document.getElementById("score-display").textContent = score;
+      document.getElementById("fever-bar").style.width = `${isFever ? (feverTimer / 300) * 100 : feverGauge}%`;
+
+      gameLoopId = requestAnimationFrame(update);
+    }
+
+    // ゲーム開始
+    function startGame() {
+      sound.init();
+      score = 0;
+      timeLeft = 40;
+      feverGauge = 0;
+      isFever = false;
+      magnetActive = false;
+      items = [];
+      isGameRunning = true;
+
+      document.getElementById("overlay-start").classList.add("hidden");
+      document.getElementById("overlay-result").classList.add("hidden");
+      document.getElementById("timer-display").textContent = timeLeft;
+
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById("timer-display").textContent = timeLeft;
+        if (timeLeft <= 0) {
+          endGame();
+        }
+      }, 1000);
+
+      if (gameLoopId) cancelAnimationFrame(gameLoopId);
+      gameLoopId = requestAnimationFrame(update);
+    }
+
+    // ゲーム終了
+    function endGame() {
+      isGameRunning = false;
+      clearInterval(timerInterval);
+      if (gameLoopId) cancelAnimationFrame(gameLoopId);
+
+      gameWrapper.classList.remove("fever-mode");
+
+      // 称号計算
+      let title = "駆け出しモンスター";
+      if (score >= 1500) title = "👑 伝説の神くいしんぼう";
+      else if (score >= 1000) title = "🍰 お菓子ハンターマスター";
+      else if (score >= 600) title = "✨ 一人前のパクパク";
+
+      document.getElementById("final-score").textContent = score;
+      document.getElementById("rank-title").textContent = `称号: ${title}`;
+      document.getElementById("overlay-result").classList.remove("hidden");
+
+      saveScoreToFirestore(score);
+    }
+
+    document.getElementById("start-game-btn").addEventListener("click", startGame);
+    document.getElementById("retry-btn").addEventListener("click", startGame);
+
+    /* ===================================================
+       5. Firebase設定モーダル制御
+       =================================================== */
+    const configModal = document.getElementById("config-modal");
+    document.getElementById("config-btn").addEventListener("click", () => {
+      configModal.classList.remove("hidden");
+      if (savedConfig) {
+        document.getElementById("cfg-apiKey").value = savedConfig.apiKey || "";
+        document.getElementById("cfg-authDomain").value = savedConfig.authDomain || "";
+        document.getElementById("cfg-projectId").value = savedConfig.projectId || "";
+      }
+    });
+
+    document.getElementById("close-config-btn").addEventListener("click", () => {
+      configModal.classList.add("hidden");
+    });
+
+    document.getElementById("save-config-btn").addEventListener("click", () => {
+      const cfg = {
+        apiKey: document.getElementById("cfg-apiKey").value.trim(),
+        authDomain: document.getElementById("cfg-authDomain").value.trim(),
+        projectId: document.getElementById("cfg-projectId").value.trim()
+      };
+
+      if (cfg.apiKey && cfg.projectId) {
+        localStorage.setItem("custom_firebase_config", JSON.stringify(cfg));
+        alert("設定を保存しました！ページを再読み込みします。");
+        location.reload();
+      } else {
+        alert("API Key と Project ID を入力してください。");
+      }
+    });
+  </script>
+</body>
+</html>
